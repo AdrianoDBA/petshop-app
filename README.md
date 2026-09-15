@@ -70,32 +70,20 @@ Proteção patrimonial completa dos dados da loja:
 
 ---
 
-## 🔑 Controle e Emissão de Licenças Comerciais
+## 🔑 Controle de Licenças Comerciais com Machine ID (RSA-2048)
 
-O software possui motor de validação criptográfica offline **HMAC-SHA256**. O cliente não precisa estar conectado à internet para o software validar a licença.
+O software conta com motor de validação criptográfica assimétrica **RSA de 2048 bits**. O cliente não tem acesso ao gerador de chaves e é matematicamente impossível forjar uma licença:
+* **No Computador do Cliente**: Possui apenas a Chave Pública que verifica a autenticidade e amarra a licença ao hardware exclusivo da máquina (**Machine ID**).
+* **No Computador do Desenvolvedor (Privado)**: Fica a Chave Privada secreta para emitir e assinar as licenças comerciais.
 
-### Como o Vendedor / Administrador Gera Chaves para Clientes:
-
-No terminal, execute o gerador utilitário:
-
-```bash
-# Licença Mensal (30 dias)
-node backend/scripts/gerar-licenca.js --cliente "Pet Shop Patinhas de Ouro" --dias 30
-
-# Licença Anual (365 dias)
-node backend/scripts/gerar-licenca.js --cliente "Clínica PetVida" --dias 365 --tipo anual --doc "12.345.678/0001-90"
-
-# Licença Vitalícia
-node backend/scripts/gerar-licenca.js --cliente "Pet Shop Central" --tipo vitalicio
-```
-
-### Como Auditar / Verificar uma Chave de Licença:
-```bash
-node backend/scripts/verificar-licenca.js "TOKEN_DA_CHAVE"
-```
-
-* **Avisos Prévios**: Faltando 7 dias ou menos para a expiração, um aviso amarelo elegante surge no topo do software alertando o cliente com botão para renovar via WhatsApp.
-* **Bloqueio de Segurança**: Se o plano expirar, a criação de novas vendas e agendamentos é travada graciosamente até a entrada da nova chave, mantendo os dados intactos para consulta.
+### Fluxo de Renovação do Cliente:
+1. Quando a licença estiver nos últimos 7 dias ou vencer, o cliente visualiza o código exclusivo do computador dele: `REQ-PET-XXXX-YYYY-ZZZZ`.
+2. O cliente clica no botão **"📧 Enviar Código por E-mail ao Suporte"** ou **"📲 Enviar via WhatsApp"** em **Gestão > Licença & Assinatura**.
+3. O desenvolvedor recebe o código, confirma o pagamento via PIX e gera a chave de liberação no seu terminal privado:
+   ```bash
+   node admin-keygen/gerar.js --maquina "REQ-PET-XXXX-YYYY-ZZZZ" --dias 30 --cliente "Pet Shop Patinhas"
+   ```
+4. O cliente cola o código de liberação recebido no campo de ativação e o sistema é liberado imediatamente por mais 30 dias (ou 1 ano).
 
 ---
 

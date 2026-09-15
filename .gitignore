@@ -40,6 +40,10 @@ frontend/dist/
 *.bak*
 *.backup
 
+# Ferramenta privada de geração de licenças do Administrador
+admin-keygen/
+*private*.pem
+
 # Arquivos do Sistema Operacional
 .DS_Store
 Thumbs.db

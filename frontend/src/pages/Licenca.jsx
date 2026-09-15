@@ -5,7 +5,11 @@ export default function Licenca() {
   const [licenca, setLicenca] = useState(null);
   const [chaveNova, setChaveNova] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [copiado, setCopiado] = useState(false);
   const [mensagem, setMensagem] = useState({ tipo: '', texto: '' });
+
+  // E-mail de suporte do desenvolvedor
+  const emailSuporte = 'adrianodba@github.com';
 
   useEffect(() => {
     carregar();
@@ -15,6 +19,39 @@ export default function Licenca() {
     api.get('/licenca')
       .then(({ data }) => setLicenca(data))
       .catch(() => {});
+  }
+
+  function copiarCodigoMaquina() {
+    if (!licenca?.codigo_maquina) return;
+    navigator.clipboard.writeText(licenca.codigo_maquina);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 3000);
+  }
+
+  function obterLinkEmail() {
+    if (!licenca) return '#';
+    const assunto = encodeURIComponent(`[RENOVAÇÃO PETSHOP PRO] Solicitação de Chave - ${licenca.nome_loja || 'Minha Loja'}`);
+    const corpo = encodeURIComponent(
+      `Olá Adriano,\n\n` +
+      `Gostaria de solicitar a renovação da minha licença do PetShop Pro.\n\n` +
+      `🏬 Nome do Pet Shop: ${licenca.nome_loja || 'Minha Loja'}\n` +
+      `💻 Código deste Computador (Machine ID): ${licenca.codigo_maquina}\n` +
+      `📅 Vencimento Atual: ${licenca.validade ? licenca.validade.split('-').reverse().join('/') : 'Trial'}\n\n` +
+      `Favor enviar a chave de ativação após a confirmação do pagamento.\n` +
+      `Obrigado!`
+    );
+    return `mailto:${emailSuporte}?subject=${assunto}&body=${corpo}`;
+  }
+
+  function obterLinkWhatsApp() {
+    if (!licenca) return '#';
+    const texto = encodeURIComponent(
+      `Olá! Gostaria de renovar minha licença do PetShop Pro.\n\n` +
+      `*Loja:* ${licenca.nome_loja || 'Meu Pet Shop'}\n` +
+      `*Código do meu Computador:* ${licenca.codigo_maquina}\n\n` +
+      `Segue o código para gerar a nova chave de ativação!`
+    );
+    return `https://wa.me/5511999999999?text=${texto}`;
   }
 
   async function ativarNovaChave(e) {
@@ -41,7 +78,7 @@ export default function Licenca() {
       <div className="page-header">
         <div>
           <h1>🔑 Licença & Assinatura do Sistema</h1>
-          <p>Gerenciamento da licença comercial, validade e renovação</p>
+          <p>Controle de validade autônomo, identificação da máquina e renovação</p>
         </div>
       </div>
 
@@ -51,11 +88,56 @@ export default function Licenca() {
         </div>
       )}
 
+      {/* CARD EM DESTAQUE: CÓDIGO DESTE COMPUTADOR */}
+      {licenca && (
+        <div className="card" style={{ background: '#f8fafc', border: '2px dashed #cbd5e1', marginBottom: 24, padding: 20 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+            <div>
+              <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--primary)' }}>
+                💻 Identificação Exclusiva deste Computador (Machine ID)
+              </span>
+              <div style={{ fontSize: 22, fontFamily: 'monospace', fontWeight: 800, color: '#1e293b', marginTop: 4 }}>
+                {licenca.codigo_maquina || 'Carregando...'}
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-light)' }}>
+                Envie este código ao suporte para receber sua chave de ativação atrelada a este computador.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={copiarCodigoMaquina}
+              >
+                {copiado ? '✓ Copiado!' : '📋 Copiar Código'}
+              </button>
+              <a
+                href={obterLinkEmail()}
+                className="btn btn-primary"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                📧 Enviar Código por E-mail
+              </a>
+              <a
+                href={obterLinkWhatsApp()}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-success"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                📲 Enviar via WhatsApp
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
         
-        {/* CARD DE STATUS DA LICENÇA */}
+        {/* STATUS DA LICENÇA */}
         <div className="card">
-          <h2 style={{ marginBottom: 16, fontSize: 18 }}>📋 Status da Assinatura Atual</h2>
+          <h2 style={{ marginBottom: 16, fontSize: 18 }}>📋 Situação da sua Licença</h2>
           
           {licenca ? (
             <div>
@@ -76,10 +158,10 @@ export default function Licenca() {
                 </div>
 
                 <h3 style={{ margin: '12px 0 4px', fontSize: 18, color: licenca.expirada ? '#991b1b' : '#065f46' }}>
-                  Plano {licenca.tipo?.toUpperCase()}
+                  {licenca.tipo === 'trial' ? 'Avaliação Gratuita (Trial)' : `Plano ${licenca.tipo?.toUpperCase()}`}
                 </h3>
                 <p style={{ margin: 0, fontSize: 14, color: 'var(--text-light)' }}>
-                  Titular: <strong>{licenca.cliente || 'PetShop Pro'}</strong>
+                  Estabelecimento: <strong>{licenca.cliente || licenca.nome_loja}</strong>
                 </p>
 
                 <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between' }}>
@@ -90,7 +172,7 @@ export default function Licenca() {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-light)' }}>Tempo Restante:</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-light)' }}>Dias Restantes:</span>
                     <div style={{ fontWeight: 700, color: licenca.dias_restantes <= 7 ? 'var(--danger)' : 'var(--success)' }}>
                       {licenca.dias_restantes} dia(s)
                     </div>
@@ -100,34 +182,34 @@ export default function Licenca() {
 
               {licenca.expirada && (
                 <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 14, marginBottom: 16, color: '#991b1b', fontSize: 13 }}>
-                  ⚠️ O prazo da sua licença encerrou. Para continuar criando novos agendamentos e faturando no PDV, insira uma nova chave de renovação abaixo.
+                  ⚠️ O período da sua licença encerrou. Clique no botão de E-mail ou WhatsApp acima para enviar o seu código de computador e renovar imediatamente.
                 </div>
               )}
 
-              <div style={{ fontSize: 13, color: 'var(--text-light)' }}>
-                🔒 <strong>Segurança Local-First:</strong> A validação da sua licença é realizada localmente no computador da loja, não dependendo de conexão externa para o funcionamento do caixa diário.
+              <div style={{ fontSize: 13, color: 'var(--text-light)', lineHeight: 1.5 }}>
+                🔒 <strong>Validação Criptográfica Assimétrica (RSA-2048):</strong> Todas as chaves são autenticadas por assinatura digital pública no próprio computador da loja, garantindo funcionamento autônomo sem depender de servidores em nuvem para o caixa e a agenda.
               </div>
             </div>
           ) : (
-            <p>Carregando dados da licença...</p>
+            <p>Consultando status da licença...</p>
           )}
         </div>
 
-        {/* CARD DE ATIVAÇÃO DE NOVA CHAVE */}
+        {/* ATIVAÇÃO DE CHAVE RECEBIDA */}
         <div className="card">
-          <h2 style={{ marginBottom: 16, fontSize: 18 }}>🔑 Inserir Nova Chave de Ativação</h2>
+          <h2 style={{ marginBottom: 16, fontSize: 18 }}>🔑 Ativar Nova Chave de Licença</h2>
           <p style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 16 }}>
-            Adquiriu um novo período ou renovou sua assinatura mensal/anual? Cole a chave fornecida pelo suporte para estender a validade do seu sistema.
+            Após efetuar o pagamento e receber a chave enviada pelo desenvolvedor por e-mail ou WhatsApp, cole o código completo abaixo:
           </p>
 
           <form onSubmit={ativarNovaChave}>
             <div className="form-group">
-              <label>Chave de Ativação *</label>
+              <label>Chave de Ativação (Formato LIC-PET-...) *</label>
               <textarea
-                rows="4"
+                rows="5"
                 value={chaveNova}
                 onChange={e => setChaveNova(e.target.value)}
-                placeholder="Cole aqui a chave enviada pelo suporte (ex: eyJjIjoi...)"
+                placeholder="Cole aqui o código de ativação fornecido pelo suporte (ex: LIC-PET-eyJuYW1lIjoi...)"
                 style={{ fontFamily: 'monospace', fontSize: 12 }}
                 required
               />
@@ -137,29 +219,11 @@ export default function Licenca() {
               type="submit"
               className="btn btn-primary"
               disabled={carregando}
-              style={{ width: '100%', marginBottom: 16 }}
+              style={{ width: '100%' }}
             >
-              {carregando ? '⏳ Verificando Chave...' : '🚀 Validar e Ativar Licença'}
+              {carregando ? '⏳ Verificando Assinatura...' : '🚀 Ativar Licença no Sistema'}
             </button>
           </form>
-
-          {/* Suporte / Renovação via WhatsApp */}
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, textAlign: 'center' }}>
-            <span style={{ fontSize: 24, display: 'block', marginBottom: 4 }}>💬</span>
-            <strong style={{ fontSize: 14 }}>Precisa de Suporte ou Quer Renovar?</strong>
-            <p style={{ fontSize: 12, color: 'var(--text-light)', margin: '4px 0 12px' }}>
-              Entre em contato direto com o desenvolvedor para receber sua chave imediata via PIX.
-            </p>
-            <a
-              href="https://wa.me/5511999999999?text=Ol%C3%A1%2C+preciso+renovar+a+minha+licen%C3%A7a+do+PetShop+Pro"
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-success btn-sm"
-              style={{ display: 'inline-block', textDecoration: 'none' }}
-            >
-              📲 Falar no WhatsApp de Suporte
-            </a>
-          </div>
         </div>
 
       </div>

@@ -1,86 +1,74 @@
+import fs from 'fs';
+import path from 'path';
 import crypto from 'crypto';
+import { fileURLToPath } from 'url';
 import { Configuracao } from '../models/index.js';
+import { obterMachineId } from '../utils/machineId.js';
 
-const MASTER_SALT = process.env.LICENSE_SECRET || 'PETSHOP_PRO_SECURE_ENTERPRISE_KEY_2026';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicKeyPath = path.resolve(__dirname, '../config/license_public.pem');
 
-/**
- * Normaliza uma chave de licença no formato PETPRO-XXXX-XXXX-XXXX-XXXX
- */
-export function formatarChave(rawHex) {
-  const clean = rawHex.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const chunks = [];
-  for (let i = 0; i < clean.length && chunks.length < 4; i += 4) {
-    chunks.push(clean.substring(i, i + 4));
-  }
-  return `PETPRO-${chunks.join('-')}`;
+// Lê a chave pública embutida no software do cliente
+let PUBLIC_KEY = null;
+if (fs.existsSync(publicKeyPath)) {
+  PUBLIC_KEY = fs.readFileSync(publicKeyPath, 'utf8');
 }
 
 /**
- * Cria uma assinatura criptográfica HMAC-SHA256 para o payload
+ * Valida criptograficamente uma chave de licença usando a Chave Pública RSA
+ * @param {string} licencaStr Chave no formato LIC-PET-[payload].[assinatura]
+ * @param {string} machineIdEsperado ID do hardware local
  */
-function assinarPayload(dados) {
-  const hmac = crypto.createHmac('sha256', MASTER_SALT);
-  hmac.update(JSON.stringify(dados));
-  return hmac.digest('hex').substring(0, 16).toUpperCase();
-}
-
-/**
- * Gera uma chave de licença comercial válida
- * @param {Object} params
- * @param {string} params.cliente Nome do Pet Shop / Cliente
- * @param {string} params.documento CNPJ ou CPF
- * @param {number} params.dias Validade em dias a partir de hoje
- * @param {string} params.tipo 'mensal' | 'anual' | 'vitalicio' | 'trial'
- * @returns {string} Token de licença completo
- */
-export function gerarLicenca({ cliente, documento = '', dias = 30, tipo = 'mensal' }) {
-  const agora = new Date();
-  const dataValidade = new Date(agora);
-  if (tipo === 'vitalicio') {
-    dataValidade.setFullYear(agora.getFullYear() + 50);
-  } else {
-    dataValidade.setDate(agora.getDate() + parseInt(dias, 10));
+export function validarLicencaRSA(licencaStr, machineIdEsperado) {
+  if (!licencaStr || typeof licencaStr !== 'string') {
+    return { valida: false, motivo: 'Chave de licença não fornecida.' };
   }
 
-  const payload = {
-    c: cliente.trim(),
-    d: documento.replace(/\D/g, ''),
-    t: tipo,
-    v: dataValidade.toISOString().split('T')[0]
-  };
-
-  const sig = assinarPayload(payload);
-  const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  
-  return `${payloadBase64}.${sig}`;
-}
-
-/**
- * Valida a chave de licença informada
- * @param {string} licencaStr 
- * @returns {{ valida: boolean, payload?: Object, motivo?: string }}
- */
-export function validarLicenca(licencaStr) {
-  if (!licencaStr || typeof licencaStr !== 'string' || !licencaStr.includes('.')) {
+  const clean = licencaStr.trim();
+  if (!clean.startsWith('LIC-PET-') || !clean.includes('.')) {
     return { valida: false, motivo: 'Formato de chave de licença inválido.' };
   }
 
+  const token = clean.replace('LIC-PET-', '');
+  const [payloadBase64, sigBase64] = token.split('.');
+
+  if (!payloadBase64 || !sigBase64) {
+    return { valida: false, motivo: 'Formato da chave está corrompido.' };
+  }
+
+  if (!PUBLIC_KEY) {
+    return { valida: false, motivo: 'Chave pública de validação não encontrada no servidor.' };
+  }
+
   try {
-    const [payloadBase64, sig] = licencaStr.trim().split('.');
-    if (!payloadBase64 || !sig) {
-      return { valida: false, motivo: 'Formato de licença corrompido.' };
+    // 1. Valida a Assinatura Digital RSA-SHA256 usando a Chave Pública
+    const verifier = crypto.createVerify('SHA256');
+    verifier.update(payloadBase64);
+    verifier.end();
+
+    const assinaturaValida = verifier.verify(PUBLIC_KEY, sigBase64, 'base64url');
+    if (!assinaturaValida) {
+      return { valida: false, motivo: 'Assinatura digital inválida. Esta chave foi alterada ou não é autêntica.' };
     }
 
+    // 2. Decodifica o payload JSON
     const payloadJson = Buffer.from(payloadBase64, 'base64url').toString('utf8');
     const payload = JSON.parse(payloadJson);
 
-    // Valida integridade criptográfica
-    const sigEsperada = assinarPayload(payload);
-    if (sig !== sigEsperada) {
-      return { valida: false, motivo: 'Assinatura da chave inválida ou adulterada.' };
+    // 3. Valida se a licença pertence a ESTE computador (Machine ID)
+    if (machineIdEsperado && payload.m) {
+      const idAtualNorm = machineIdEsperado.trim().toUpperCase();
+      const idLicencaNorm = payload.m.trim().toUpperCase();
+      if (idAtualNorm !== idLicencaNorm) {
+        return {
+          valida: false,
+          motivo: `Esta licença foi emitida para outro computador (${payload.m}). Seu computador é ${idAtualNorm}.`
+        };
+      }
     }
 
-    // Valida data de expiração
+    // 4. Valida data de vencimento
     const hojeStr = new Date().toISOString().split('T')[0];
     const expirou = payload.v < hojeStr;
 
@@ -91,21 +79,25 @@ export function validarLicenca(licencaStr) {
       motivo: expirou ? `Licença expirou em ${payload.v.split('-').reverse().join('/')}.` : null
     };
   } catch (err) {
-    return { valida: false, motivo: 'Falha ao decodificar chave de licença.' };
+    return { valida: false, motivo: 'Falha ao processar e decodificar a chave de licença.' };
   }
 }
 
 /**
- * Obtém o status da licença atual configurada no sistema
+ * Consulta o status da licença do cliente nesta máquina
  */
 export async function obterStatusLicenca() {
+  const machineId = await obterMachineId();
+  const confNomeLoja = await Configuracao.findOne({ where: { chave: 'loja_nome' } });
+  const nomeLoja = confNomeLoja?.valor || 'Meu Pet Shop';
+
   const confLicenca = await Configuracao.findOne({ where: { chave: 'licenca_chave' } });
   const confTrialInicio = await Configuracao.findOne({ where: { chave: 'trial_inicio' } });
   const hojeStr = new Date().toISOString().split('T')[0];
 
-  // Se houver licença comercial cadastrada
+  // 1. Se o cliente possui uma chave cadastrada
   if (confLicenca && confLicenca.valor) {
-    const validacao = validarLicenca(confLicenca.valor);
+    const validacao = validarLicencaRSA(confLicenca.valor, machineId);
     if (validacao.valida || validacao.expirada) {
       const p = validacao.payload;
       const dataVal = new Date(p.v + 'T23:59:59');
@@ -115,7 +107,8 @@ export async function obterStatusLicenca() {
         ativa: !validacao.expirada,
         tipo: p.t,
         cliente: p.c,
-        documento: p.d,
+        codigo_maquina: machineId,
+        nome_loja: nomeLoja,
         validade: p.v,
         dias_restantes: Math.max(0, diasRestantes),
         aviso_expiracao: diasRestantes <= 7 && diasRestantes >= 0,
@@ -126,13 +119,13 @@ export async function obterStatusLicenca() {
     }
   }
 
-  // Se não houver licença comercial, verifica se está no período de Trial (15 dias)
+  // 2. Se não possui chave comercial, ativa modo Trial (15 dias na máquina)
   let dataTrial = confTrialInicio?.valor;
   if (!dataTrial) {
     dataTrial = hojeStr;
     await Configuracao.findOrCreate({
       where: { chave: 'trial_inicio' },
-      defaults: { valor: hojeStr, descricao: 'Data de início do período de avaliação gratuita' }
+      defaults: { valor: dataTrial, descricao: 'Data de início da avaliação de 15 dias' }
     });
   }
 
@@ -145,33 +138,36 @@ export async function obterStatusLicenca() {
   return {
     ativa: !trialExpirado,
     tipo: 'trial',
-    cliente: 'Período de Avaliação Gratuita (Trial)',
-    documento: '',
+    cliente: nomeLoja,
+    codigo_maquina: machineId,
+    nome_loja: nomeLoja,
     validade: dataFimTrialStr,
     dias_restantes: Math.max(0, diasRestantesTrial),
     aviso_expiracao: diasRestantesTrial <= 5 && diasRestantesTrial >= 0,
     expirada: trialExpirado,
-    motivo: trialExpirado ? 'O seu período de avaliação de 15 dias expirou.' : null,
+    motivo: trialExpirado ? 'O período de avaliação gratuita de 15 dias expirou.' : null,
     chave: null
   };
 }
 
 /**
- * Registra e ativa uma nova chave de licença no banco
+ * Ativa uma nova chave fornecida pelo administrador
  */
 export async function ativarLicenca(chave) {
-  const validacao = validarLicenca(chave);
+  const machineId = await obterMachineId();
+  const validacao = validarLicencaRSA(chave, machineId);
+
   if (!validacao.valida && !validacao.expirada) {
     throw new Error(validacao.motivo || 'Chave de licença inválida.');
   }
 
   if (validacao.expirada) {
-    throw new Error(`Esta licença já está expirada desde ${validacao.payload.v}.`);
+    throw new Error(`Esta licença já está vencida desde ${validacao.payload.v}.`);
   }
 
   const [conf, created] = await Configuracao.findOrCreate({
     where: { chave: 'licenca_chave' },
-    defaults: { valor: chave.trim(), descricao: 'Chave de ativação do PetShop Pro' }
+    defaults: { valor: chave.trim(), descricao: 'Chave de licença oficial ativada' }
   });
 
   if (!created) {
