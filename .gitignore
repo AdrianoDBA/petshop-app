@@ -1,0 +1,45 @@
+# Dependências
+node_modules/
+*/node_modules/
+
+# Variáveis de ambiente
+.env
+*/.env
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Banco de dados local SQLite (Garante banco limpo ao clonar)
+petshop.db
+*.sqlite
+*.sqlite3
+petshop.db-journal
+petshop.db-wal
+petshop.db-shm
+temp_*.db
+
+# Backups gerados localmente
+backups/
+*.zip
+
+# Relatórios PDF gerados
+reports/*.pdf
+backend/reports/*.pdf
+
+# Builds
+dist/
+frontend/dist/
+.vite/
+
+# Ambientes e arquivos temporários
+.claude/
+*.bak
+*.bak*
+*.backup
+
+# Arquivos do Sistema Operacional
+.DS_Store
+Thumbs.db

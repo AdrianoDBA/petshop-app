@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: petshop_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: petshop_pro
+    ports:
+      - "5432:5432"
+    volumes:
+      - petshop_pgdata:/var/lib/postgresql/data
+
+volumes:
+  petshop_pgdata:

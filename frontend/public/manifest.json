@@ -1,0 +1,30 @@
+{
+  "short_name": "PetShop Pro",
+  "name": "PetShop Pro - Sistema de Gestão Empresarial",
+  "description": "Sistema completo para gestão de pet shops, estética animal e clínica veterinária.",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#ff6b35",
+  "display": "standalone",
+  "orientation": "any",
+  "scope": "/"
+}
